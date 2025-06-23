@@ -22,6 +22,8 @@ def jordan_weigner(J, g: np.array):
 #particle hole symmetry attempt
 def project_phs_plus (v): return np.array([v[i] + v[i + len(v) // 2] for i in range(len(v) // 2)])
 def project_phs_minus (v): return 1j * np.array([v[i] - v[i + len(v) // 2] for i in range(len(v) // 2)])
+def project_maj (v): return np.array(sum(list([list(x) for x in zip(project_phs_minus(v), project_phs_plus(v))]), []))
+
 
 def expm(A, order=2):
     orders = np.zeros((order + 1, *A.shape)).astype(complex)
@@ -62,3 +64,17 @@ def U(H):
 #simulate sudden changes hamiltonians
 def U_(t, dt, H_steps: list[(np.array, float)]):
     raise "Unimplemented"
+
+
+
+## CMAPs show
+def show_cmaps():
+    x_r = np.linspace(0, 1, 100)
+    for (i, c) in list(enumerate(plt.colormaps())):
+        plt.scatter(x_r,x_r * 0 + i * 0.6,c=[plt.get_cmap(c)(x) for x in x_r])
+        plt.text(-0.3, i * 0.6, c)
+    plt.gcf().set_size_inches(5, 45)
+
+
+LOSCHMIDT = "loschmidt"
+STATES = "states"

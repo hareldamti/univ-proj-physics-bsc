@@ -1,7 +1,0 @@
-## CMAPs show
-
-x_r = np.linspace(0, 1, 100)
-for (i, c) in list(enumerate(plt.colormaps())):
-    plt.scatter(x_r,x_r * 0 + i * 0.6,c=[plt.get_cmap(c)(x) for x in x_r])
-    plt.text(-0.3, i * 0.6, c)
-plt.gcf().set_size_inches(5, 45)
