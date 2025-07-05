@@ -1,5 +1,6 @@
 import numpy as np
-from utils import sx, sy, sz, s0, to_n, fill_list, U, maj_ordered, cmap, LOSCHMIDT, STATES
+import scipy as sp
+from utils import sx, sy, sz, s0, to_n, fill_list, U, maj_ordered, cmap, c, intersections, expm, LOSCHMIDT, STATES, canon_eigen
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib import rc
@@ -12,10 +13,15 @@ FFwriter=FFMpegWriter(fps=fps, extra_args=['-vcodec', 'libx264'])
 class kitaev_chain_model:
     def __init__(self, n: int, mu: float | list[float], t: float | list[float], delta: float | list[float]):
         self.n = n
+        self.N = 2 ** n
         self.mu = fill_list(mu, n)
         self.t = fill_list(t, n)
         self.delta = fill_list(delta, n)
-    
+
+        self.vac = None
+        self.bdg_evals_sorted = None
+        self.bdg_evecs_sorted = None
+
     def bdg_hamiltonian(self):
         H = np.zeros((2 * self.n, 2 * self.n))
         for i in range(self.n):
@@ -28,6 +34,31 @@ class kitaev_chain_model:
             H[i + 1][i + self.n] = H[i + self.n][i + 1] = self.delta[i] / 2
         return H
 
+    def bdg_eigen(self):
+        H0 = self.bdg_hamiltonian()
+        evals, evecs = np.linalg.eigh(H0)
+        evals_sorted, evecs_sorted = canon_eigen(evals, evecs)
+        self.bdg_evals_sorted = evals_sorted
+        self.bdg_evecs_sorted = evecs_sorted
+        P = evecs_sorted.T
+        if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T, H0):
+            print("Eigenvectors numerical incompabillity")
+
+        self.U = P[:self.n, :self.n]
+        Us = P[self.n:, self.n:]
+        self.V = P[:self.n, self.n:]
+        Vs = P[self.n:, :self.n]
+        if not (
+            np.allclose(self.U.T @ self.V + self.V.T @ self.U, self.U * 0)
+            and np.allclose(self.U.T @ self.U + self.V.T @ self.V, np.eye(self.n))
+            and np.allclose(self.U, Us.conj()) and np.allclose(self.V, Vs.conj())
+            ):
+            print("U, V numerical incompabillity")
+
+    def psi(self, i, dagger=False):
+        r = sum([c(j, self.n, dagger) * self.U[i, j] + c(j, self.n, not dagger) * self.V[i, j] for j in range(self.n)], np.zeros((self.N, self.N)))
+        return r.conj() if dagger else r
+
     def tfim_hamiltonian(self):
         H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
         for i in range(self.n):
@@ -39,6 +70,23 @@ class kitaev_chain_model:
         H *= - 1. / 2
         return H
 
+    def tfim_vac_from_G(self, k = 1e-3):
+        idx = np.where(self.bdg_evals_sorted > k)[0][0] # first positive eigenvalue
+        U_prime = self.U[idx:, idx:]
+        V_prime = self.V[idx:, idx:]
+        G = -np.linalg.inv(U_prime) @ V_prime
+        A = 0.5 * sum([sum([G[i - idx][j - idx] * c(i, self.n, True) @ c(j, self.n, True) for i in range(idx, self.n)], np.zeros((self.N, self.N))) for j in range(idx, self.n)], np.zeros((self.N, self.N)))
+        zero = np.zeros((self.N, 1)).astype(np.complex128)
+        zero[-1, 0] = 1
+        vac = expm(A, 4) @ zero
+        self.vac = vac / np.linalg.norm(vac)
+        return self.vac
+    
+    def tfim_vac_from_intersections(self, k=1e-3):
+        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in range(self.n)])
+        self.vac = vac / np.linalg.norm(vac)
+        return self.vac
+    
     def tfim_hamiltonian_as_sum(self):
         H = []
         for i in range(self.n):
@@ -48,6 +96,16 @@ class kitaev_chain_model:
         for i in range(self.n - 1):
             H.append ( -.5 * (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1) )
         return H
+
+class bdg_kitaev:
+    def __init__(self, M: kitaev_chain_model):
+        self.M = M
+        self.bdg_eigen()
+    
+
+
+    
+
 
 
 class quench_simulation_bdg:

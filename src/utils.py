@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy as sp
 # A, B -> I_1 X .. X A_i X .. X B_j X .. X I_n
 def to_n(n, A, i, B=None, j=-1):
     r = 1
@@ -40,6 +40,25 @@ def maj_ordered (v): return np.array(sum(list([list(x) for x in zip(maj_plus(v),
 def power_set(n):
     if n == 0: return [[]]
     else: return sum([[j + [i] for i in [0, 1]] for j in power_set(n - 1)], [])
+
+def c(i, n, dagger=False):
+    As = [sz if j < i else 0.5 * (sx + (1 if dagger else -1) * 1j * sy) if j == i else s0 for j in range(n)]
+    return tensor_product(As)
+
+def intersections_(U, V, ftol):
+    M = np.hstack((U, -V))
+    nullspace = sp.linalg.null_space(M, rcond=ftol)
+    nullspace_U = nullspace[:np.shape(U)[1]]
+    inter = U @ nullspace_U
+    for i in range(np.shape(inter)[1]):
+        inter[:,i] *= 1./np.linalg.norm(inter[:,i])
+    return inter
+
+def intersections(As, ftol=1e-3):
+    inter = As[0]
+    for A in As[1:]:
+        inter = intersections_(inter, A, ftol)
+    return inter
 
 def canon_eigen(evals, evecs):
     n = len(evals) // 2
