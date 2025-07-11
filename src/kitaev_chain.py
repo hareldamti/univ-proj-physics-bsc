@@ -25,13 +25,13 @@ class kitaev_chain_model:
     def bdg_hamiltonian(self):
         H = np.zeros((2 * self.n, 2 * self.n))
         for i in range(self.n):
-            H[i][i] = -self.mu[i]
-            H[i + self.n][i + self.n] = self.mu[i]
+            H[i][i] = -self.mu[i] / 2
+            H[i + self.n][i + self.n] = self.mu[i] / 2
         for i in range(self.n - 1):
             H[i][i + 1] = H[i + 1][i] = - self.t[i] / 2
             H[i + self.n][i + 1 + self.n] = H[i + 1 + self.n][i + self.n] = self.t[i] / 2
-            H[i][i + 1 + self.n] = H[i + 1 + self.n][i] = - self.delta[i] / 2
-            H[i + 1][i + self.n] = H[i + self.n][i + 1] = self.delta[i] / 2
+            H[i][i + 1 + self.n] = H[i + 1 + self.n][i] = self.delta[i] / 2
+            H[i + 1][i + self.n] = H[i + self.n][i + 1] = - self.delta[i] / 2
         return H
 
     def bdg_eigen(self):
@@ -59,7 +59,7 @@ class kitaev_chain_model:
         r = sum([c(j, self.n, dagger) * self.U[i, j] + c(j, self.n, not dagger) * self.V[i, j] for j in range(self.n)], np.zeros((self.N, self.N)))
         return r.conj() if dagger else r
 
-    def tfim_hamiltonian(self):
+    def tfim_hamiltonian_JW_on_orig(self):
         H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
         for i in range(self.n):
             H += self.mu[i] * to_n(self.n, sz, i)
@@ -68,6 +68,20 @@ class kitaev_chain_model:
         for i in range(self.n - 1):
             H += (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1)
         H *= - 1. / 2
+        return H
+    
+    def tfim_hamiltonian_JW_on_bdg(self):
+        H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
+        for i in range(self.n):
+            H += self.mu[i] * ( c(i, self.n, dagger=True) @ c(i, self.n) - 
+                               (c(i, self.n) @ c(i, self.n, dagger=True)) )
+        for i in range(self.n - 1):
+            H += self.t[i] * ( c(i, self.n, dagger=True) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n) -
+                              (c(i + 1, self.n) @ c(i, self.n, dagger=True) + c(i, self.n) @ c(i + 1, self.n, dagger=True)) )
+            H += self.delta[i] * ( c(i, self.n) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n, dagger=True) - 
+                                  (c(i + 1, self.n) @ c(i, self.n) + c(i, self.n, dagger=True) @ c(i + 1, self.n, dagger=True))
+                                  )
+        H *= -0.5
         return H
 
     def tfim_vac_from_G(self, k = 1e-3):
