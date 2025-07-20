@@ -70,6 +70,16 @@ class kitaev_chain_model:
         H *= - 1. / 2
         return H
     
+    def tfim_hamiltonian_JW_on_bdg_before_split(self):
+        H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
+        for i in range(self.n):
+            H += self.mu[i] * ( c(i, self.n, dagger=True) @ c(i, self.n) )
+        for i in range(self.n - 1):
+            H += self.t[i] * ( c(i, self.n, dagger=True) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n) )
+            H += self.delta[i] * ( c(i, self.n) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n, dagger=True) )
+        H *= -1
+        return H
+
     def tfim_hamiltonian_JW_on_bdg(self):
         H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
         for i in range(self.n):
