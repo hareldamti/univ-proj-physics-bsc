@@ -42,7 +42,7 @@ def power_set(n):
     else: return sum([[j + [i] for i in [0, 1]] for j in power_set(n - 1)], [])
 
 def c(i, n, dagger=False):
-    As = [sz if j < i else 0.5 * (sx + (1 if dagger else -1) * 1j * sy) if j == i else s0 for j in range(n)]
+    As = [-sz if j < i else 0.5 * (sx + (1 if dagger else -1) * 1j * sy) if j == i else s0 for j in range(n)]
     return tensor_product(As)
 
 def zero(n):

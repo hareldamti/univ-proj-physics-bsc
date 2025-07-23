@@ -59,7 +59,7 @@ class kitaev_chain_model:
         r = sum([c(j, self.n, dagger) * self.U[i, j] + c(j, self.n, not dagger) * self.V[i, j] for j in range(self.n)], np.zeros((self.N, self.N)))
         return r.conj() if dagger else r
 
-    def tfim_hamiltonian_JW_on_orig(self):
+    def tfim_hamiltonian_JW(self):
         H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
         for i in range(self.n):
             H += self.mu[i] * to_n(self.n, sz, i)
@@ -67,7 +67,10 @@ class kitaev_chain_model:
             H += (self.t[i] - self.delta[i]) * to_n(self.n, sx, i, sx, i + 1)
         for i in range(self.n - 1):
             H += (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1)
-        H *= - 1. / 2
+        H *= -.5
+        
+        # H_JW = H - sigma(mu) / 2
+
         return H
     
     def tfim_hamiltonian_JW_on_bdg_before_split(self):
