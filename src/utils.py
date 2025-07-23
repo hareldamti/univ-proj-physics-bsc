@@ -88,6 +88,8 @@ def expm(A, order=2):
     return np.sum(orders, 0)
 
 LOSCHMIDT = "loschmidt"
+LOSCHMIDT_BDG = "loschmidt_bdg"
+LOSCHMIDT_TFIM = "loschmidt_tfim"
 STATES = "states"
 
 #################### 

@@ -1,6 +1,6 @@
 import numpy as np
 import scipy as sp
-from utils import sx, sy, sz, s0, to_n, fill_list, U, maj_ordered, cmap, c, intersections, expm, LOSCHMIDT, STATES, canon_eigen
+from utils import LOSCHMIDT_BDG, LOSCHMIDT_TFIM, sx, sy, sz, s0, to_n, fill_list, U, maj_ordered, cmap, c, intersections, expm, LOSCHMIDT, STATES, canon_eigen
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib import rc
@@ -127,10 +127,74 @@ class bdg_kitaev:
         self.bdg_eigen()
     
 
+class quench_simulation:
+    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model):
+        self.H0 = H0
+        self.H = H
+        self.n = H.n
+        self.U_bdg = U(self.H.bdg_hamiltonian())
 
+        H_tfim = H.tfim_hamiltonian_JW_on_bdg_before_split()
+        tfim_energies, _ = np.linalg.eigh(H_tfim)
+        self.U_tfim = U(0.5 * (H_tfim - tfim_energies[0] * np.eye(H.N)))
+
+        H0.bdg_eigen()
+        H0.tfim_vac_from_intersections()
+        self.simulation_data = {
+            LOSCHMIDT_BDG: [],
+            LOSCHMIDT_TFIM: [],
+            STATES: [],
+        }
+
+    def plot_initial_zero_eigenstates(self, title = "Initial eigenstates"):
+        fig, (ax1) = plt.subplots(1, 1)
+        fig.set_size_inches(13, 5)
+        ax1.set_title(title)
+        eigenpairs = list(filter(lambda pair: pair[0] ** 2 < 1e-5, zip(self.H0.bdg_evals_sorted, self.H0.bdg_evecs_sorted.T)))
+        for pair in eigenpairs:
+            ax1.plot(np.absolute(maj_ordered(pair[1])) ** 2)
+
+    def fill_sim(self, dt, T):
+        t_range = np.arange(0, T, dt)
+        L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in range(self.n)])
+        L_bdg = np.array([np.abs(np.linalg.det(self.H0.bdg_evecs_sorted[:, :self.n].T.conj() @ self.U_bdg(t) @ self.H0.bdg_evecs_sorted[:, :self.n])) for t in t_range])
+        L_tfim = np.array([np.abs(np.linalg.det(L_initial.T.conj() @ self.U_tfim(t) @ L_initial)) for t in t_range])
+        states = np.array([self.U_bdg(t) @ self.H0.bdg_evecs_sorted for t in t_range])
+        self.simulation_data = {
+            LOSCHMIDT_BDG: L_bdg,
+            LOSCHMIDT_TFIM: L_tfim,
+            STATES: states
+        }
+
+    @property
+    def frames(self): return len(self.simulation_data[LOSCHMIDT])
+
+    def save_animation(self, title):
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        fig.set_size_inches(13, 5)
+        ax1.set_title(title)
+        x = np.linspace(-1, 1, 2 * self.n)
+        plots = [None for _ in range(2 * self.n)]
+        for i in range(2 * self.n):
+            plots[i] = ax1.plot(x, np.absolute(maj_ordered(self.simulation_data[STATES][0][:, i]) ** 2),
+                                c = cmap(np.real((self.evals0[i] - min(self.evals0)) / (max(self.evals0) - min(self.evals0)))))[0]
+        l_bdg = ax2.plot([0,0],[0,self.simulation_data[LOSCHMIDT_BDG][0]], label = 'BdG Loschmidt')
+        l_tfim = ax2.plot([0.1,0.1],[0,self.simulation_data[LOSCHMIDT_TFIM][0]], label = 'TFIM Loschmidt')
+        frame_text = ax1.text(0.5, 0.3, "0")
+
+        def init(): return tuple(plots)
+
+        def animate(frame):
+            for i in range(2 * self.n):
+                plots[i].set_data(x, np.absolute(maj_ordered(self.simulation_data[STATES][frame][:, i]) ** 2))
+            l_bdg.set_data([0,0],[0,self.simulation_data[LOSCHMIDT_BDG][frame]], label = 'BdG Loschmidt')
+            l_tfim.set_data([0.1,0.1],[0,self.simulation_data[LOSCHMIDT_TFIM][frame]], label = 'TFIM Loschmidt')
+            return tuple(plots)
+        
+        anim = FuncAnimation(fig, animate, init_func=init,
+                        frames = self.frames, interval = 30, blit = True)
     
-
-
+        anim.save(f"simulations/{title}.mp4", writer=FFwriter)
 
 class quench_simulation_bdg:
     def __init__(self, model0: kitaev_chain_model, model: kitaev_chain_model):
