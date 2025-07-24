@@ -11,12 +11,13 @@ FFwriter=FFMpegWriter(fps=fps, extra_args=['-vcodec', 'libx264'])
 
 
 class kitaev_chain_model:
-    def __init__(self, n: int, mu: float | list[float], t: float | list[float], delta: float | list[float]):
+    def __init__(self, n: int, mu: float | list[float], t: float | list[float], delta: float | list[float], hasGhosts=False):
+        self.hasGhosts = hasGhosts
         self.n = n
         self.N = 2 ** n
         self.mu = fill_list(mu, n)
-        self.t = fill_list(t, n)
-        self.delta = fill_list(delta, n)
+        self.t = fill_list(t, n - 1)
+        self.delta = fill_list(delta, n - 1)
 
         self.vac = None
         self.bdg_evals_sorted = None
@@ -110,8 +111,10 @@ class kitaev_chain_model:
         return self.vac
     
     def tfim_vac_from_intersections(self, k=1e-3):
-        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in range(self.n)])
+        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in (range(1, self.n - 1) if self.hasGhosts else range(self.n))])
         self.vac = vac / np.linalg.norm(vac)
+        if self.hasGhosts:
+            self.vac = self.vac[:, 0].reshape((self.N, 1))
         return self.vac
     
     def tfim_hamiltonian_as_sum(self):
@@ -122,16 +125,10 @@ class kitaev_chain_model:
             H.append ( -.5 * (self.t[i] - self.delta[i]) * to_n(self.n, sx, i, sx, i + 1) )
         for i in range(self.n - 1):
             H.append ( -.5 * (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1) )
-        return H
-
-class bdg_kitaev:
-    def __init__(self, M: kitaev_chain_model):
-        self.M = M
-        self.bdg_eigen()
-    
+        return H 
 
 class quench_simulation:
-    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model):
+    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model, hasGhosts=False):
         self.H0 = H0
         self.H = H
         self.n = H.n
@@ -199,148 +196,10 @@ class quench_simulation:
     
         anim.save(f"simulations/{title}.mp4", writer=FFwriter)
 
-class quench_simulation_bdg:
-    def __init__(self, model0: kitaev_chain_model, model: kitaev_chain_model):
-        self.H0 = model0.bdg_hamiltonian()
-        self.H = model.bdg_hamiltonian()
-        self.n = model0.n
-        self.U = U(self.H)
-        self.simulation_data = {
-            LOSCHMIDT: [],
-            STATES: [],
-        }
-        self.solve_H0()
-
-    def solve_H0(self):
-        evals, evecs = np.linalg.eig(self.H0)
-        evecs = evecs.T
-        evals, evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
-        evecs = np.array(evecs)
-        self.evecs0 = evecs
-        self.evals0 = evals
-        return self.evals0, self.evecs0
-    
-    def plot_initial_zero_eigenstates(self, title = "Initial eigenstates"):
-        fig, (ax1) = plt.subplots(1, 1)
-        fig.set_size_inches(13, 5)
-        ax1.set_title(title)
-        eigenpairs = list(filter(lambda pair: pair[0] ** 2 < 1e-5, zip(self.evals0, self.evecs0)))
-        for pair in eigenpairs:
-            ax1.plot(np.absolute(maj_ordered(pair[1])) ** 2)
-
-    def fill_sim(self, dt, T):
-        self.simulation_data = {
-            LOSCHMIDT: [],
-            STATES: [],
-        }
-        for i in range(int(T // dt)):
-            Ut = self.U(dt * 1.0 * i).T
-            self.simulation_data[STATES].append(self.evecs0 @ Ut.T)
-            self.simulation_data[LOSCHMIDT].append(np.absolute(np.linalg.det((self.evecs0 @ Ut @ self.evecs0.T)[:self.n,:self.n])) ** 2)
-    
-    @property
-    def frames(self): return len(self.simulation_data[LOSCHMIDT])
-
-    def save_animation(self, title):
-        fig, (ax1) = plt.subplots(1, 1)
-        fig.set_size_inches(13, 5)
-        ax1.set_title(title)
-        x = np.linspace(-1, 1, 2 * self.n)
-        plots = [None for _ in range(2 * self.n)]
-        for i in range(2 * self.n):
-            plots[i] = ax1.plot(x, np.absolute(maj_ordered(self.simulation_data[STATES][0][i]) ** 2),
-                                c = cmap(np.real((self.evals0[i] - min(self.evals0)) / (max(self.evals0) - min(self.evals0)))))[0]
-        
-        frame_text = ax1.text(0.5, 0.3, "0")
-
-        def init(): return tuple(plots)
-
-        def animate(frame):
-            for i in range(2 * self.n):
-                plots[i].set_data(x, np.absolute(maj_ordered(self.simulation_data[STATES][frame][i]) ** 2))
-            frame_text.set_text(f"Frame: {frame}\ncos($\\theta$) = {self.simulation_data[LOSCHMIDT][frame]:.3f}")
-            return tuple(plots)
-        
-        anim = FuncAnimation(fig, animate, init_func=init,
-                        frames = self.frames, interval = 30, blit = True)
-    
-        anim.save(f"simulations/{title}.mp4", writer=FFwriter)
-
-    def plot_loschmidt(self, title = "Loschmidt plot for quench"):
-        fig, (ax1) = plt.subplots(1, 1)
-        fig.set_size_inches(13, 5)
-        ax1.set_title(title)
-        ax1.set_ylabel("Loschmidt amplitude")
-        ax1.set_xlabel("Frame")
-        ax1.plot(self.simulation_data[LOSCHMIDT])
-        fig.show()
-
-
-class quench_simulation_tfim:
-    def __init__(self, model0: kitaev_chain_model, model: kitaev_chain_model):
-        self.H0 = model0.tfim_hamiltonian()
-        self.H = model.tfim_hamiltonian()
-        self.n = model0.n
-        self.U = U(self.H)
-        self.simulation_data = {
-            LOSCHMIDT: [],
-            STATES: [],
-        }
-        self.solve_H0()
-
-    def solve_H0(self):
-        evals, evecs = np.linalg.eig(self.H0)
-        evecs = evecs.T
-        evals, evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
-        evecs = np.array(evecs)
-        evals = np.real(evals)
-        self.evecs0 = evecs
-        self.evals0 = evals
-        return self.evals0, self.evecs0
-
-    def plot_initial_zero_eigenstates(self, title = "Initial eigenstates"):
-        fig, (ax1) = plt.subplots(1, 1)
-        fig.set_size_inches(13, 5)
-        ax1.set_title(title)
-        eigenpairs = list(filter(lambda pair: pair[0] ** 2 < 1e-5, zip(self.evals0, self.evecs0)))
-        for pair in eigenpairs:
-                ax1.plot([
-            np.absolute(pair[1].T @ to_n(self.n, sz, i) @ pair[1]) ** 2
-            for i in range(self.n)
-        ])
-
-    def fill_sim(self, dt, T):
-        self.simulation_data = {
-            STATES: [],
-        }
-        for i in range(int(T // dt)):
-            Ut = self.U(dt * 1.0 * i).T
-            self.simulation_data[STATES].append(self.evecs0 @ Ut.T)
-    
-    @property
-    def frames(self): return len(self.simulation_data[STATES])
-
-    def save_animation(self, title):
-        fig, (ax1) = plt.subplots(1, 1)
-        fig.set_size_inches(13, 5)
-        ax1.set_title(title)
-        x = np.linspace(-1, 1, self.n)
-        plots = [None for _ in range(2 ** self.n)]
-        for i in range(2 ** self.n):
-            plots[i] = ax1.plot(x, [np.absolute(self.simulation_data[STATES][0][i].T @ to_n(self.n, sz, i) @ self.simulation_data[STATES][0][i]) ** 2 for i in range(self.n)],
-                                c = cmap(np.real((self.evals0[i] - min(self.evals0)) / (max(self.evals0) - min(self.evals0)))))[0]
-        
-        frame_text = ax1.text(0.5, 0.3, "0")
-
-        def init(): return tuple(plots)
-
-        def animate(frame):
-            for i in range(2 ** self.n):
-                plots[i].set_data(x, [np.absolute(self.simulation_data[STATES][0][i].T @ to_n(self.n, sz, i) @ self.simulation_data[STATES][0][i]) ** 2 for i in range(self.n)])
-            frame_text.set_text(f"Frame: {frame}")
-            return tuple(plots)
-        
-        anim = FuncAnimation(fig, animate, init_func=init,
-                        frames = self.frames, interval = 30, blit = True)
-    
-        anim.save(f"simulations/{title}.mp4", writer=FFwriter)
+def fermion_chain_from_spin_chain_params(n_sites, J, h_z, h_edges_x):
+    n = n_sites + 2
+    mu = np.ones(n) * h_z; mu[0] = mu[-1] = 0
+    t = np.ones(n - 1) * J; t[0] = t[-1] = h_edges_x
+    t *= .5
+    delta = -t
+    return kitaev_chain_model(n, mu, t, delta, True)
