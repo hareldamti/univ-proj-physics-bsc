@@ -8,6 +8,83 @@ rc('animation', ffmpeg_path='C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe')
 fps = 15
 FFwriter=FFMpegWriter(fps=fps, extra_args=['-vcodec', 'libx264'])
 
+class TV_XY_model:
+    def __init__(self, L, J, gamma, h, b1, bL):
+        self.L = L
+        self.n = L + 2
+        self.J = J
+        self.gamma = gamma
+        self.h = h
+        self.b1 = b1
+        self.bL = bL
+    def H_spinchain(self, as_sum = False):
+        elements = []
+        for i in range(1, self.L):
+            elements.append(
+                self.J * .25 * (
+                        to_n(self.L + 1, sx, i, sx, i + 1) * (1. + self.gamma)
+                        +
+                        to_n(self.L + 1, sy, i, sy, i + 1) * (1. - self.gamma)
+                    )
+                )
+        for i in range(1, self.L + 1):
+            elements.append(
+                self.h * -.5 * to_n(self.L + 1, sz, i)
+            )
+        elements.append( 0.5 * (
+            self.b1[0] * 0.5 * to_n(self.L + 1, sx, 0, sx, 1) +
+            self.b1[1] * 0.5 * to_n(self.L + 1, sx, 0, sy, 1) +
+            self.b1[2] * 0.5 * to_n(self.L + 1, sx, 0, sz, 1)
+        ))
+        elements.append( 0.5 * (
+            self.bL[0] * 0.5 * to_n(self.L + 1, sx, self.L, sx, self.L + 1) +
+            self.bL[1] * 0.5 * to_n(self.L + 1, sy, self.L, sx, self.L + 1) +
+            self.bL[2] * 0.5 * to_n(self.L + 1, sz, self.L, sx, self.L + 1)
+        ))
+        return elements if as_sum else sum(elements)
+    def H_bdg(self):
+        H = np.zeros((2 * (self.L + 2), 2 * (self.L + 2))).astype(complex)
+        for i in range(1, self.L):
+            H[i, i + 1]              += -.5 * self.J
+            H[i, i + 1 + self.n]     += -.5 * self.J * self.gamma
+            H[i + 1, i]              += -.5 * self.J
+            H[i + 1 + self.n, i]     += -.5 * self.J * self.gamma
+        for i in range(1, self.L + 1):    
+            H[i, i]                  += - self.h
+        
+        H[0, 1]          += -.5 * (self.b1[0] + 1j * self.b1[1])
+        H[0, 1 + self.n] += -.5 * (self.b1[0] - 1j * self.b1[1])
+        H[1, 0]          += -.5 * (self.b1[0] - 1j * self.b1[1])
+        H[1 + self.n, 0] += -.5 * (self.b1[0] + 1j * self.b1[1])
+        H[0][0]          +=       self.b1[2]
+
+        H[self.L + 1, self.L]          += -.5 * (self.bL[0] + 1j * self.bL[1])
+        H[self.L, self.L + 1 + self.n] += -.5 * (self.bL[0] - 1j * self.bL[1])
+        H[self.L, self.L + 1]          += -.5 * (self.bL[0] - 1j * self.bL[1])
+        H[self.L + 1 + self.n, self.L] += -.5 * (self.bL[0] + 1j * self.bL[1])
+        H[0][0]                        += self.bL[2]
+
+        for i in range(1, self.L):
+            H[(i + 1 + self.n)%(2 * self.n), (i + self.n)%(2 * self.n)]              -= -.5 * self.J
+            H[(i + 1 + self.n + self.n)%(2 * self.n), (i + self.n)%(2 * self.n)]     -= -.5 * self.J * self.gamma
+            H[(i + self.n)%(2 * self.n), (i + 1 + self.n)%(2 * self.n)]              -= -.5 * self.J
+            H[(i + self.n)%(2 * self.n), (i + 1 + self.n + self.n)%(2 * self.n)]     -= -.5 * self.J * self.gamma
+        for i in range(1, self.L + 1):    
+            H[(i + self.n)%(2 * self.n), (i + self.n)%(2 * self.n)]                  -= - self.h
+        
+        H[(1 + self.n)%(2 * self.n), (0 + self.n)%(2 * self.n)]          -= -.5 * (self.b1[0] + 1j * self.b1[1])
+        H[(1 + self.n + self.n)%(2 * self.n), (0 + self.n)%(2 * self.n)] -= -.5 * (self.b1[0] - 1j * self.b1[1])
+        H[(0 + self.n)%(2 * self.n), (1 + self.n)%(2 * self.n)]          -= -.5 * (self.b1[0] - 1j * self.b1[1])
+        H[(0 + self.n)%(2 * self.n), (1 + self.n + self.n)%(2 * self.n)] -= -.5 * (self.b1[0] + 1j * self.b1[1])
+        H[0][0]          -=       self.b1[2]
+
+        H[(self.L + self.n)%(2 * self.n), (self.L + 1 + self.n)%(2 * self.n)]          -= -.5 * (self.bL[0] + 1j * self.bL[1])
+        H[(self.L + 1 + self.n + self.n)%(2 * self.n), (self.L + self.n)%(2 * self.n)] -= -.5 * (self.bL[0] - 1j * self.bL[1])
+        H[(self.L + 1 + self.n)%(2 * self.n), (self.L + self.n)%(2 * self.n)]          -= -.5 * (self.bL[0] - 1j * self.bL[1])
+        H[(self.L + self.n)%(2 * self.n), (self.L + 1 + self.n + self.n)%(2 * self.n)] -= -.5 * (self.bL[0] + 1j * self.bL[1])
+        H[0][0]                        -= self.bL[2]
+        return H * .5
+    
 
 
 class kitaev_chain_model:
@@ -35,7 +112,7 @@ class kitaev_chain_model:
             H[i + 1][i + self.n] = H[i + self.n][i + 1] = - self.delta[i] / 2
         return H
 
-    def bdg_eigen(self):
+    def bdg_eigen(self, forceEvecs = None):
         H0 = self.bdg_hamiltonian()
         evals, evecs = np.linalg.eigh(H0)
         evals_sorted, evecs_sorted = canon_eigen(evals, evecs)
@@ -44,11 +121,13 @@ class kitaev_chain_model:
         P = evecs_sorted.T
         if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T, H0):
             print("Eigenvectors numerical incompabillity")
-
+        if forceEvecs is not None:
+            P[:len(forceEvecs), :] = forceEvecs
         self.U = P[:self.n, :self.n]
         Us = P[self.n:, self.n:]
         self.V = P[:self.n, self.n:]
         Vs = P[self.n:, :self.n]
+
         if not (
             np.allclose(self.U.T @ self.V + self.V.T @ self.U, self.U * 0)
             and np.allclose(self.U.T @ self.U + self.V.T @ self.V, np.eye(self.n))
@@ -114,7 +193,7 @@ class kitaev_chain_model:
         vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in (range(1, self.n - 1) if self.hasGhosts else range(self.n))])
         self.vac = vac / np.linalg.norm(vac)
         if self.hasGhosts:
-            self.vac = self.vac[:, 0].reshape((self.N, 1))
+            self.vac = self.vac + self.psi(0, dagger=True) @ self.vac
         return self.vac
     
     def tfim_hamiltonian_as_sum(self):
@@ -128,13 +207,13 @@ class kitaev_chain_model:
         return H 
 
 class quench_simulation:
-    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model, hasGhosts=False):
+    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model):
         self.H0 = H0
         self.H = H
         self.n = H.n
         self.U_bdg = U(self.H.bdg_hamiltonian())
 
-        H_tfim = H.tfim_hamiltonian_JW_on_bdg_before_split()
+        H_tfim = H.tfim_hamiltonian_JW()
         tfim_energies, _ = np.linalg.eigh(H_tfim)
         self.U_tfim = U(0.5 * (H_tfim - tfim_energies[0] * np.eye(H.N)))
 
@@ -195,11 +274,3 @@ class quench_simulation:
                         frames = self.frames, interval = 30, blit = True)
     
         anim.save(f"simulations/{title}.mp4", writer=FFwriter)
-
-def fermion_chain_from_spin_chain_params(n_sites, J, h_z, h_edges_x):
-    n = n_sites + 2
-    mu = np.ones(n) * h_z; mu[0] = mu[-1] = 0
-    t = np.ones(n - 1) * J; t[0] = t[-1] = h_edges_x
-    t *= .5
-    delta = -t
-    return kitaev_chain_model(n, mu, t, delta, True)

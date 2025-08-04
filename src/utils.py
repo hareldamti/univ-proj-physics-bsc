@@ -21,6 +21,10 @@ sx = np.ones((2,2)).astype(complex) - np.eye(2)
 sy = np.zeros((2,2)).astype(complex)
 sy[1][0] = 1j
 sy[0][1] = -1j
+splus = np.zeros((2,2)).astype(complex)
+sminus = np.zeros((2,2)).astype(complex)
+splus[0][1] = 1
+sminus[1][0] = 1
 
 def fill_list(x, n):
     if type(x) == float or type(x) == int or type(x) == np.float64: return np.ones(n) * x
