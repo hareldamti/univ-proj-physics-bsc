@@ -31,12 +31,6 @@ def fill_list(x, n):
     assert len(x) == n
     return np.array(x)
 
-def U(H):
-    evals, evecs = np.linalg.eig(H)
-    m_evals, m_evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
-    m_evecs = np.array(m_evecs)
-    return lambda t: evecs @ np.diag(np.exp(- 1j * t * evals)) @ evecs.T
-
 def maj_plus (v): return np.array([v[i] + v[i + len(v) // 2] for i in range(len(v) // 2)])
 def maj_minus (v): return 1j * np.array([(v[i + len(v) // 2] - v[i]) for i in range(len(v) // 2)])
 def maj_ordered (v): return np.array(sum(list([list(x) for x in zip(maj_plus(v), maj_minus(v))]), []))

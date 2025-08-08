@@ -1,6 +1,6 @@
 import numpy as np
 import scipy as sp
-from utils import LOSCHMIDT_BDG, LOSCHMIDT_TFIM, sx, sy, sz, s0, to_n, fill_list, U, maj_ordered, cmap, c, intersections, expm, LOSCHMIDT, STATES, canon_eigen
+from utils import LOSCHMIDT_BDG, LOSCHMIDT_TFIM, sx, sy, sz, s0, to_n, fill_list, maj_ordered, cmap, c, intersections, expm, LOSCHMIDT, STATES, canon_eigen
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 from matplotlib import rc
@@ -113,16 +113,24 @@ class kitaev_chain_model:
         return H
 
     def bdg_eigen(self, forceEvecs = None):
+        if self.hasGhosts:
+            forceEvecs = np.zeros(2 * self.n)
+            forceEvecs[0] = forceEvecs[self.n - 1] = forceEvecs[self.n] = 1
+            forceEvecs[2 * self.n - 1] = -1
+            forceEvecs *= 0.5
+            forceEvecs = np.vstack([forceEvecs]).T
         H0 = self.bdg_hamiltonian()
         evals, evecs = np.linalg.eigh(H0)
         evals_sorted, evecs_sorted = canon_eigen(evals, evecs)
+        if forceEvecs is not None:
+            size = np.shape(forceEvecs)[1]
+            evecs_sorted[:, :size] = forceEvecs
+            evecs_sorted[:, self.n : self.n + size] = np.vstack([forceEvecs[self.n:], forceEvecs[:self.n]])
         self.bdg_evals_sorted = evals_sorted
         self.bdg_evecs_sorted = evecs_sorted
         P = evecs_sorted.T
         if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T, H0):
             print("Eigenvectors numerical incompabillity")
-        if forceEvecs is not None:
-            P[:len(forceEvecs), :] = forceEvecs
         self.U = P[:self.n, :self.n]
         Us = P[self.n:, self.n:]
         self.V = P[:self.n, self.n:]
@@ -206,19 +214,31 @@ class kitaev_chain_model:
             H.append ( -.5 * (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1) )
         return H 
 
+def U(H):
+    if (type(H) == kitaev_chain_model):
+        return lambda t: H.bdg_evecs_sorted @ np.diag(np.exp(- 1j * t * H.bdg_evals_sorted)) @ H.bdg_evecs_sorted.T
+    
+    evals, evecs = np.linalg.eig(H)
+    m_evals, m_evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
+    m_evecs = np.array(m_evecs)
+    return lambda t: evecs @ np.diag(np.exp(- 1j * t * evals)) @ evecs.T
+
 class quench_simulation:
-    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model):
+    def __init__(self, H0: kitaev_chain_model, H: kitaev_chain_model, includeTfim=True):
         self.H0 = H0
         self.H = H
         self.n = H.n
-        self.U_bdg = U(self.H.bdg_hamiltonian())
-
-        H_tfim = H.tfim_hamiltonian_JW()
-        tfim_energies, _ = np.linalg.eigh(H_tfim)
-        self.U_tfim = U(0.5 * (H_tfim - tfim_energies[0] * np.eye(H.N)))
+        self.U_bdg = U(self.H)
+        self.includeTfim = includeTfim
+        if includeTfim:
+            H_tfim = H.tfim_hamiltonian_JW()
+            tfim_energies, _ = np.linalg.eigh(H_tfim)
+            self.U_tfim = U(0.5 * (H_tfim - tfim_energies[0] * np.eye(H.N)))
 
         H0.bdg_eigen()
-        H0.tfim_vac_from_intersections()
+        H.bdg_eigen()
+
+        if includeTfim: H0.tfim_vac_from_intersections()
         self.simulation_data = {
             LOSCHMIDT_BDG: [],
             LOSCHMIDT_TFIM: [],
@@ -235,9 +255,11 @@ class quench_simulation:
 
     def fill_sim(self, dt, T):
         t_range = np.arange(0, T, dt)
-        L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in range(self.n)])
         L_bdg = np.array([np.abs(np.linalg.det(self.H0.bdg_evecs_sorted[:, :self.n].T.conj() @ self.U_bdg(t) @ self.H0.bdg_evecs_sorted[:, :self.n])) for t in t_range])
-        L_tfim = np.array([np.abs(np.linalg.det(L_initial.T.conj() @ self.U_tfim(t) @ L_initial)) for t in t_range])
+        L_tfim = t_range * 0
+        if self.includeTfim:
+            L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in range(1)])
+            L_tfim = np.array([np.abs(np.linalg.det(L_initial.T.conj() @ self.U_tfim(t) @ L_initial)) for t in t_range]) ** 2
         states = np.array([self.U_bdg(t) @ self.H0.bdg_evecs_sorted for t in t_range])
         self.simulation_data = {
             LOSCHMIDT_BDG: L_bdg,
@@ -255,7 +277,7 @@ class quench_simulation:
         x = np.linspace(-1, 1, 2 * self.n)
         plots = [None for _ in range(2 * self.n)]
         for i in range(2 * self.n):
-            plots[i] = ax1.plot(x, np.absolute(maj_ordered(self.simulation_data[STATES][0][:, i]) ** 2),
+            plots[i] = ax1.plot(x, np.max(np.absolute(maj_ordered(self.simulation_data[STATES][0][:, i])) ** 2, 4),
                                 c = cmap(np.real((self.evals0[i] - min(self.evals0)) / (max(self.evals0) - min(self.evals0)))))[0]
         l_bdg = ax2.plot([0,0],[0,self.simulation_data[LOSCHMIDT_BDG][0]], label = 'BdG Loschmidt')
         l_tfim = ax2.plot([0.1,0.1],[0,self.simulation_data[LOSCHMIDT_TFIM][0]], label = 'TFIM Loschmidt')
@@ -265,7 +287,7 @@ class quench_simulation:
 
         def animate(frame):
             for i in range(2 * self.n):
-                plots[i].set_data(x, np.absolute(maj_ordered(self.simulation_data[STATES][frame][:, i]) ** 2))
+                plots[i].set_data(x, np.max(np.absolute(maj_ordered(self.simulation_data[STATES][frame][:, i])) ** 2, 4))
             l_bdg.set_data([0,0],[0,self.simulation_data[LOSCHMIDT_BDG][frame]], label = 'BdG Loschmidt')
             l_tfim.set_data([0.1,0.1],[0,self.simulation_data[LOSCHMIDT_TFIM][frame]], label = 'TFIM Loschmidt')
             return tuple(plots)
