@@ -198,10 +198,11 @@ class kitaev_chain_model:
         return self.vac
     
     def tfim_vac_from_intersections(self, k=1e-3):
-        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in (range(1, self.n - 1) if self.hasGhosts else range(self.n))])
+        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in (range(self.n) if self.hasGhosts else range(self.n))])
         self.vac = vac / np.linalg.norm(vac)
         if self.hasGhosts:
             self.vac = self.vac + self.psi(0, dagger=True) @ self.vac
+        self.vac = vac / np.linalg.norm(vac)
         return self.vac
     
     def tfim_hamiltonian_as_sum(self):
@@ -245,20 +246,22 @@ class quench_simulation:
             STATES: [],
         }
 
-    def plot_initial_zero_eigenstates(self, title = "Initial eigenstates"):
+    def plot_initial_ground_states(self, title = "Initial eigenstates"):
         fig, (ax1) = plt.subplots(1, 1)
         fig.set_size_inches(13, 5)
         ax1.set_title(title)
-        eigenpairs = list(filter(lambda pair: pair[0] ** 2 < 1e-5, zip(self.H0.bdg_evals_sorted, self.H0.bdg_evecs_sorted.T)))
-        for pair in eigenpairs:
-            ax1.plot(np.absolute(maj_ordered(pair[1])) ** 2)
+        for evec in self.H0.bdg_evecs_sorted[:,[0, self.n]].T:
+            ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
+            if self.H0.hasGhosts:
+                for evec in self.H0.bdg_evecs_sorted[:,[1, self.n + 1]].T:
+                    ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
 
     def fill_sim(self, dt, T):
         t_range = np.arange(0, T, dt)
         L_bdg = np.array([np.abs(np.linalg.det(self.H0.bdg_evecs_sorted[:, :self.n].T.conj() @ self.U_bdg(t) @ self.H0.bdg_evecs_sorted[:, :self.n])) for t in t_range])
         L_tfim = t_range * 0
         if self.includeTfim:
-            L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in range(1)])
+            L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in ([0] if self.H0.hasGhosts else [0])])
             L_tfim = np.array([np.abs(np.linalg.det(L_initial.T.conj() @ self.U_tfim(t) @ L_initial)) for t in t_range]) ** 2
         states = np.array([self.U_bdg(t) @ self.H0.bdg_evecs_sorted for t in t_range])
         self.simulation_data = {
