@@ -126,8 +126,7 @@ class kitaev_chain_model:
             size = np.shape(forceEvecs)[1]
             evecs_sorted[:, :size] = forceEvecs
             evecs_sorted[:, self.n : self.n + size] = np.vstack([forceEvecs[self.n:], forceEvecs[:self.n]])
-        self.bdg_evals_sorted = evals_sorted
-        self.bdg_evecs_sorted = evecs_sorted
+        
         P = evecs_sorted.T
         if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T, H0):
             print("Eigenvectors numerical incompabillity")
@@ -135,6 +134,11 @@ class kitaev_chain_model:
         Us = P[self.n:, self.n:]
         self.V = P[:self.n, self.n:]
         Vs = P[self.n:, :self.n]
+
+        P = np.block([[self.U, self.V], [self.V.conj(), self.U.conj()]])
+
+        self.bdg_evals_sorted = evals_sorted
+        self.bdg_evecs_sorted = P.T
 
         if not (
             np.allclose(self.U.T @ self.V + self.V.T @ self.U, self.U * 0)
@@ -250,11 +254,13 @@ class quench_simulation:
         fig, (ax1) = plt.subplots(1, 1)
         fig.set_size_inches(13, 5)
         ax1.set_title(title)
-        for evec in self.H0.bdg_evecs_sorted[:,[0, self.n]].T:
-            ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
-            if self.H0.hasGhosts:
-                for evec in self.H0.bdg_evecs_sorted[:,[1, self.n + 1]].T:
-                    ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
+
+        if self.H0.hasGhosts:
+            for evec in self.H0.bdg_evecs_sorted[:,[1, self.n + 1]].T:
+                ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
+        else:
+            for evec in self.H0.bdg_evecs_sorted[:,[0, self.n]].T:
+                ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
 
     def fill_sim(self, dt, T):
         t_range = np.arange(0, T, dt)
