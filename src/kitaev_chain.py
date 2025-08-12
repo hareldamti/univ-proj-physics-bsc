@@ -127,8 +127,11 @@ class kitaev_chain_model:
             evecs_sorted[:, :size] = forceEvecs
             evecs_sorted[:, self.n : self.n + size] = np.vstack([forceEvecs[self.n:], forceEvecs[:self.n]])
         
+        self.bdg_evals_sorted = evals_sorted
+        self.bdg_evecs_sorted = evecs_sorted
+
         P = evecs_sorted.T
-        if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T, H0):
+        if not np.allclose(evecs_sorted @ np.diag(evals_sorted) @ evecs_sorted.T.conj(), H0):
             print("Eigenvectors numerical incompabillity")
         self.U = P[:self.n, :self.n]
         Us = P[self.n:, self.n:]
@@ -136,16 +139,7 @@ class kitaev_chain_model:
         Vs = P[self.n:, :self.n]
 
         P = np.block([[self.U, self.V], [self.V.conj(), self.U.conj()]])
-
-        self.bdg_evals_sorted = evals_sorted
-        self.bdg_evecs_sorted = P.T
-
-        if not (
-            np.allclose(self.U.T @ self.V + self.V.T @ self.U, self.U * 0)
-            and np.allclose(self.U.T @ self.U + self.V.T @ self.V, np.eye(self.n))
-            and np.allclose(self.U, Us.conj()) and np.allclose(self.V, Vs.conj())
-            ):
-            print("U, V numerical incompabillity")
+        
 
     def psi(self, i, dagger=False):
         r = sum([c(j, self.n, dagger) * self.U[i, j] + c(j, self.n, not dagger) * self.V[i, j] for j in range(self.n)], np.zeros((self.N, self.N)))
@@ -257,10 +251,10 @@ class quench_simulation:
 
         if self.H0.hasGhosts:
             for evec in self.H0.bdg_evecs_sorted[:,[1, self.n + 1]].T:
-                ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
+                ax1.plot(np.abs(maj_ordered(evec)) ** 2)
         else:
             for evec in self.H0.bdg_evecs_sorted[:,[0, self.n]].T:
-                ax1.plot(np.absolute(maj_ordered(evec)) ** 2)
+                ax1.plot(np.abs(maj_ordered(evec)) ** 2)
 
     def fill_sim(self, dt, T):
         t_range = np.arange(0, T, dt)

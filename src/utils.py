@@ -70,11 +70,11 @@ def canon_eigen(evals, evecs):
     evals_sorted = evals[idx]
     evecs_sorted = evecs[:, idx]
     n = len(idx) // 2
-    for i in range(n):
-        max_val = np.argmax(np.abs(evecs_sorted[:n, i]))
-        evecs_sorted[:, i + n] /= evecs_sorted[max_val, i + n] / evecs_sorted[max_val, i + n]
-        max_val = np.argmax(np.abs(evecs_sorted[:n, i + n]))
-        evecs_sorted[:, i + n] /= evecs_sorted[max_val + n, i] / evecs_sorted[max_val, i + n]
+    # for i in range(n):
+    #     max_val = np.argmax(np.abs(evecs_sorted[:n, i]))
+    #     evecs_sorted[:, i + n] /= evecs_sorted[max_val, i + n] / evecs_sorted[max_val, i + n]
+    #     max_val = np.argmax(np.abs(evecs_sorted[:n, i + n]))
+    #     evecs_sorted[:, i + n] /= evecs_sorted[max_val + n, i] / evecs_sorted[max_val, i + n]
     return evals_sorted, evecs_sorted
 
 def expm(A, order=2):
