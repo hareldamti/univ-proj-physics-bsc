@@ -43,6 +43,13 @@ def c(i, n, dagger=False):
     As = [-sz if j < i else 0.5 * (sx + (1 if dagger else -1) * 1j * sy) if j == i else s0 for j in range(n)]
     return tensor_product(As)
 
+def gamma(i, n):
+    j = i // 2
+    if i % 2 == 0:
+        return c(j, n) + c(j, n, dagger=True)
+    return 1j * ( c(j, n, dagger=True) - c(j, n))
+
+
 def zero(n):
     zero = np.zeros((2 ** n, 1)).astype(np.complex128)
     zero[-1, 0] = 1
