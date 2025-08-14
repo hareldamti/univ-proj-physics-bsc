@@ -216,10 +216,7 @@ class kitaev_chain_model:
 def U(H):
     if (type(H) == kitaev_chain_model):
         return lambda t: H.bdg_evecs_sorted @ np.diag(np.exp(- 1j * t * H.bdg_evals_sorted)) @ H.bdg_evecs_sorted.T
-    
     evals, evecs = np.linalg.eig(H)
-    m_evals, m_evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
-    m_evecs = np.array(m_evecs)
     return lambda t: evecs @ np.diag(np.exp(- 1j * t * evals)) @ evecs.T
 
 class quench_simulation:
@@ -227,7 +224,7 @@ class quench_simulation:
         self.H0 = H0
         self.H = H
         self.n = H.n
-        self.U_bdg = U(self.H)
+        
         self.includeTfim = includeTfim
         if includeTfim:
             H_tfim = H.tfim_hamiltonian_JW()
@@ -236,6 +233,7 @@ class quench_simulation:
 
         H0.bdg_eigen()
         H.bdg_eigen()
+        self.U_bdg = U(self.H)
 
         if includeTfim: H0.tfim_vac_from_intersections()
         self.simulation_data = {
@@ -258,7 +256,11 @@ class quench_simulation:
 
     def fill_sim(self, dt, T):
         t_range = np.arange(0, T, dt)
-        L_bdg = np.array([np.abs(np.linalg.det(self.H0.bdg_evecs_sorted[:, :self.n].T.conj() @ self.U_bdg(t) @ self.H0.bdg_evecs_sorted[:, :self.n])) for t in t_range])
+        L_bdg = np.array([np.abs(
+            np.linalg.det(
+                self.H0.bdg_evecs_sorted[:, :self.n].T.conj() @ self.U_bdg(t) @ self.H0.bdg_evecs_sorted[:, :self.n]
+                )
+            ) for t in t_range])
         L_tfim = t_range * 0
         if self.includeTfim:
             L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in ([0] if self.H0.hasGhosts else [0])])
