@@ -21,17 +21,15 @@ sx = np.ones((2,2)).astype(complex) - np.eye(2)
 sy = np.zeros((2,2)).astype(complex)
 sy[1][0] = 1j
 sy[0][1] = -1j
+splus = np.zeros((2,2)).astype(complex)
+sminus = np.zeros((2,2)).astype(complex)
+splus[0][1] = 1
+sminus[1][0] = 1
 
 def fill_list(x, n):
     if type(x) == float or type(x) == int or type(x) == np.float64: return np.ones(n) * x
     assert len(x) == n
     return np.array(x)
-
-def U(H):
-    evals, evecs = np.linalg.eig(H)
-    m_evals, m_evecs = zip(*sorted(zip(evals, evecs), key=lambda e: -e[0]))
-    m_evecs = np.array(m_evecs)
-    return lambda t: evecs @ np.diag(np.exp(- 1j * t * evals)) @ evecs.T
 
 def maj_plus (v): return np.array([v[i] + v[i + len(v) // 2] for i in range(len(v) // 2)])
 def maj_minus (v): return 1j * np.array([(v[i + len(v) // 2] - v[i]) for i in range(len(v) // 2)])
@@ -72,11 +70,11 @@ def canon_eigen(evals, evecs):
     evals_sorted = evals[idx]
     evecs_sorted = evecs[:, idx]
     n = len(idx) // 2
-    for i in range(n):
-        max_val = np.argmax(np.abs(evecs_sorted[:n, i]))
-        evecs_sorted[:, i + n] /= evecs_sorted[max_val, i + n] / evecs_sorted[max_val, i + n]
-        max_val = np.argmax(np.abs(evecs_sorted[:n, i + n]))
-        evecs_sorted[:, i + n] /= evecs_sorted[max_val + n, i] / evecs_sorted[max_val, i + n]
+    # for i in range(n):
+    #     max_val = np.argmax(np.abs(evecs_sorted[:n, i]))
+    #     evecs_sorted[:, i + n] /= evecs_sorted[max_val, i + n] / evecs_sorted[max_val, i + n]
+    #     max_val = np.argmax(np.abs(evecs_sorted[:n, i + n]))
+    #     evecs_sorted[:, i + n] /= evecs_sorted[max_val + n, i] / evecs_sorted[max_val, i + n]
     return evals_sorted, evecs_sorted
 
 def expm(A, order=2):
