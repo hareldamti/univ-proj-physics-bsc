@@ -154,9 +154,7 @@ class kitaev_chain_model:
         for i in range(self.n - 1):
             H += (self.t[i] + self.delta[i]) * to_n(self.n, sy, i, sy, i + 1)
         H *= -.5
-        
-        # H_JW = H - sigma(mu) / 2
-
+        H *= .5 # TODO: Prove
         return H
     
     def tfim_hamiltonian_JW_on_bdg_before_split(self):
@@ -182,6 +180,12 @@ class kitaev_chain_model:
                                   )
         H *= -0.5
         return H
+
+    def tfim_vac_from_ground_state(self):
+        evals, evecs = np.linalg.eigh(self.tfim_hamiltonian_JW())
+        self.vac = evecs[:,0].reshape((self.N, 1))
+        return self.vac
+
 
     def tfim_vac_from_G(self, k = 1e-3):
         idx = np.where(self.bdg_evals_sorted > k)[0][0] # first positive eigenvalue
@@ -229,13 +233,13 @@ class quench_simulation:
         if includeTfim:
             H_tfim = H.tfim_hamiltonian_JW()
             tfim_energies, _ = np.linalg.eigh(H_tfim)
-            self.U_tfim = U(0.5 * (H_tfim - tfim_energies[0] * np.eye(H.N)))
+            self.U_tfim = U(H_tfim)
 
         H0.bdg_eigen()
         H.bdg_eigen()
         self.U_bdg = U(self.H)
 
-        if includeTfim: H0.tfim_vac_from_intersections()
+        if includeTfim: H0.tfim_vac_from_ground_state()
         self.simulation_data = {
             LOSCHMIDT_BDG: [],
             LOSCHMIDT_TFIM: [],
@@ -263,7 +267,7 @@ class quench_simulation:
             ) for t in t_range])
         L_tfim = t_range * 0
         if self.includeTfim:
-            L_initial = np.hstack([self.H0.psi(i, dagger=True) @ self.H0.vac for i in ([0] if self.H0.hasGhosts else [0])])
+            L_initial = np.hstack([self.H0.vac for i in ([0] if self.H0.hasGhosts else [0])])
             L_tfim = np.array([np.abs(np.linalg.det(L_initial.T.conj() @ self.U_tfim(t) @ L_initial)) for t in t_range]) ** 2
         states = np.array([self.U_bdg(t) @ self.H0.bdg_evecs_sorted for t in t_range])
         self.simulation_data = {
