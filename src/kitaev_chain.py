@@ -151,54 +151,9 @@ class kitaev_chain_model:
         H *= .5 # TODO: Prove
         return H
     
-    def tfim_hamiltonian_JW_on_bdg_before_split(self):
-        H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
-        for i in range(self.n):
-            H += self.mu[i] * ( c(i, self.n, dagger=True) @ c(i, self.n) )
-        for i in range(self.n - 1):
-            H += self.t[i] * ( c(i, self.n, dagger=True) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n) )
-            H += self.delta[i] * ( c(i, self.n) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n, dagger=True) )
-        H *= -1
-        return H
-
-    def tfim_hamiltonian_JW_on_bdg(self):
-        H = np.zeros((2 ** self.n, 2 ** self.n)).astype(complex)
-        for i in range(self.n):
-            H += self.mu[i] * ( c(i, self.n, dagger=True) @ c(i, self.n) - 
-                               (c(i, self.n) @ c(i, self.n, dagger=True)) )
-        for i in range(self.n - 1):
-            H += self.t[i] * ( c(i, self.n, dagger=True) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n) -
-                              (c(i + 1, self.n) @ c(i, self.n, dagger=True) + c(i, self.n) @ c(i + 1, self.n, dagger=True)) )
-            H += self.delta[i] * ( c(i, self.n) @ c(i + 1, self.n) + c(i + 1, self.n, dagger=True) @ c(i, self.n, dagger=True) - 
-                                  (c(i + 1, self.n) @ c(i, self.n) + c(i, self.n, dagger=True) @ c(i + 1, self.n, dagger=True))
-                                  )
-        H *= -0.5
-        return H
-
     def tfim_vac_from_ground_state(self):
         evals, evecs = np.linalg.eigh(self.tfim_hamiltonian_JW())
         self.vac = evecs[:,0].reshape((self.N, 1))
-        return self.vac
-
-
-    def tfim_vac_from_G(self, k = 1e-3):
-        idx = np.where(self.bdg_evals_sorted > k)[0][0] # first positive eigenvalue
-        U_prime = self.U[idx:, idx:]
-        V_prime = self.V[idx:, idx:]
-        G = -np.linalg.inv(U_prime) @ V_prime
-        A = 0.5 * sum([sum([G[i - idx][j - idx] * c(i, self.n, True) @ c(j, self.n, True) for i in range(idx, self.n)], np.zeros((self.N, self.N))) for j in range(idx, self.n)], np.zeros((self.N, self.N)))
-        zero = np.zeros((self.N, 1)).astype(np.complex128)
-        zero[-1, 0] = 1
-        vac = expm(A, 4) @ zero
-        self.vac = vac / np.linalg.norm(vac)
-        return self.vac
-    
-    def tfim_vac_from_intersections(self, k=1e-3):
-        vac = intersections([sp.linalg.null_space(self.psi(i), rcond=k) for i in (range(self.n) if self.hasGhosts else range(self.n))])
-        self.vac = vac / np.linalg.norm(vac)
-        if self.hasGhosts:
-            self.vac = self.vac + self.psi(0, dagger=True) @ self.vac
-        self.vac = vac / np.linalg.norm(vac)
         return self.vac
     
     def tfim_hamiltonian_as_sum(self):

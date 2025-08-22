@@ -49,6 +49,9 @@ def gamma(i, n):
         return c(j, n) + c(j, n, dagger=True)
     return 1j * ( c(j, n, dagger=True) - c(j, n))
 
+def nambu_to_spinchain(v):
+    n = np.size(v) // 2
+    return sum([c(i, n) * v.flatten()[i] + c(i, n, dagger=True) * v.flatten()[i + n] for i in range(n)])
 
 def zero(n):
     zero = np.zeros((2 ** n, 1)).astype(np.complex128)
