@@ -92,6 +92,16 @@ def expm(A, order=2):
         orders[i] = A @ orders[i - 1] / i
     return np.sum(orders, 0)
 
+def gamma_n(n):
+    Gamma = np.zeros((2 * n, 2 * n)).astype(complex)
+    _block = np.ones((2, 2)).astype(complex)
+    _block[0, 1] = 1j
+    _block[1, 1] = -1j
+    for i in range(n):
+        Gamma[2 * i: 2 * (i + 1), 2 * i: 2 * (i + 1)] = _block
+    Gamma = Gamma[list(range(0, 2 * n, 2)) + list(range(1, 2 * n, 2))] * 0.5 ** 0.5
+    return Gamma
+
 LOSCHMIDT = "loschmidt"
 LOSCHMIDT_BDG = "loschmidt_bdg"
 LOSCHMIDT_TFIM = "loschmidt_tfim"
@@ -108,3 +118,88 @@ def cmap(a):
     if i == 0: return values[0][1]
     k = (a - values[i - 1][0]) * 1.0 / (values[i][0] - values[i - 1][0])
     return values[i][1] * k + values[i - 1][1] * (1 - k)
+
+
+def plot_complex_matrix(M,
+                        ax=None,
+                        vmin=None,
+                        vmax=None,
+                        gamma: float = 1.0,
+                        show_phase_colorbar: bool = True,
+                        show_amp_colorbar: bool = True,
+                        cmap_phase: str = 'hsv',
+                        cmap_amp: str = 'gray',
+                        title: str | None = None,
+                        origin: str = 'upper',
+                        interpolation: str = 'nearest',
+                        aspect: str | float = 'equal'):
+    """
+    Plot a complex matrix with brightness = abs(matrix) and hue = phase (rainbow).
+    Parameters:
+      M: array-like complex matrix
+      ax: matplotlib Axes (optional). If None, a new figure/axes is created.
+      vmin, vmax: amplitude bounds for brightness mapping. If None, automatic from data.
+      gamma: gamma correction for brightness (v = (|M|-vmin)/(vmax-vmin))**gamma
+      show_phase_colorbar: whether to show a vertical colorbar for phase (radians)
+      show_amp_colorbar: whether to show a horizontal colorbar for amplitude |M|
+      cmap_phase: colormap for phase colorbar (default 'hsv' for circular rainbow)
+      cmap_amp: colormap for amplitude colorbar (default 'gray')
+      title: plot title
+      origin, interpolation, aspect: forwarded to imshow
+    Returns:
+      fig, ax, im, amp_cbar, phase_cbar
+    """
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
+
+    M = np.asarray(M)
+    amp = np.abs(M)
+    phase = np.angle(M)
+
+    if vmin is None:
+        vmin = float(amp.min()) if amp.size else 0.0
+    if vmax is None:
+        vmax = float(amp.max()) if amp.size else 1.0
+    denom = (vmax - vmin) if (vmax > vmin) else 1.0
+    v = np.clip((amp - vmin) / denom, 0.0, 1.0)
+    if gamma != 1.0:
+        v = np.clip(v ** float(gamma), 0.0, 1.0)
+
+    # map phase [-pi, pi] -> hue [0,1)
+    h = (phase + np.pi) / (2.0 * np.pi)
+    s = np.ones_like(h)
+    hsv = np.stack([h, s, v], axis=-1)        # shape (..., 3)
+    rgb = mpl.colors.hsv_to_rgb(hsv)         # convert to RGB in 0..1
+
+    created_fig = False
+    if ax is None:
+        fig, ax = plt.subplots()
+        created_fig = True
+    else:
+        fig = ax.figure
+
+    im = ax.imshow(rgb, origin=origin, interpolation=interpolation, aspect=aspect)
+    if title:
+        ax.set_title(title)
+
+    amp_cbar = None
+    phase_cbar = None
+
+    if show_phase_colorbar:
+        norm_phase = Normalize(vmin=-np.pi, vmax=np.pi)
+        sm_phase = mpl.cm.ScalarMappable(norm=norm_phase, cmap=cmap_phase)
+        sm_phase.set_array([])  # required for colorbar
+        phase_cbar = fig.colorbar(sm_phase, ax=ax, orientation='vertical', pad=0.02, fraction=0.05)
+        phase_cbar.set_label('Phase (radians)')
+        phase_cbar.set_ticks([-np.pi, -np.pi/2, 0, np.pi/2, np.pi])
+        phase_cbar.set_ticklabels([r'$-\pi$', r'$-\pi/2$', '0', r'$\pi/2$', r'$\pi$'])
+
+    if show_amp_colorbar:
+        norm_amp = Normalize(vmin=vmin, vmax=vmax)
+        sm_amp = mpl.cm.ScalarMappable(norm=norm_amp, cmap=cmap_amp)
+        sm_amp.set_array([])
+        amp_cbar = fig.colorbar(sm_amp, ax=ax, orientation='horizontal', pad=0.12, fraction=0.05)
+        amp_cbar.set_label('|M| (amplitude)')
+
+    return fig, ax, im, amp_cbar, phase_cbar

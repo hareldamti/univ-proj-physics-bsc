@@ -219,7 +219,7 @@ class kitaev_chain_model:
 
 def U(H):
     if (type(H) == kitaev_chain_model):
-        return lambda t: H.bdg_evecs_sorted @ np.diag(np.exp(- 1j * t * H.bdg_evals_sorted)) @ H.bdg_evecs_sorted.T
+        return lambda t: H.bdg_evecs_sorted @ np.diag(np.exp(- 1j * t * H.bdg_evals_sorted)) @ H.bdg_evecs_sorted.T.conj()
     evals, evecs = np.linalg.eig(H)
     return lambda t: evecs @ np.diag(np.exp(- 1j * t * evals)) @ evecs.T
 
@@ -232,7 +232,6 @@ class quench_simulation:
         self.includeTfim = includeTfim
         if includeTfim:
             H_tfim = H.tfim_hamiltonian_JW()
-            tfim_energies, _ = np.linalg.eigh(H_tfim)
             self.U_tfim = U(H_tfim)
 
         H0.bdg_eigen()
