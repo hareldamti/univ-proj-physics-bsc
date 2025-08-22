@@ -113,12 +113,6 @@ class kitaev_chain_model:
         return H
 
     def bdg_eigen(self, forceEvecs = None):
-        if self.hasGhosts:
-            forceEvecs = np.zeros(2 * self.n)
-            forceEvecs[0] = forceEvecs[self.n - 1] = forceEvecs[self.n] = 1
-            forceEvecs[2 * self.n - 1] = -1
-            forceEvecs *= 0.5
-            forceEvecs = np.vstack([forceEvecs]).T
         H0 = self.bdg_hamiltonian()
         evals, evecs = np.linalg.eigh(H0)
         evals_sorted, evecs_sorted = canon_eigen(evals, evecs)
