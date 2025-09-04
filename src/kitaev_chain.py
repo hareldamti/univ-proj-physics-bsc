@@ -151,9 +151,12 @@ class kitaev_chain_model:
         H *= .5 # TODO: Prove
         return H
     
-    def tfim_vac_from_ground_state(self):
+    def tfim_vac_from_ground_state(self, Gplus=False):
         evals, evecs = np.linalg.eigh(self.tfim_hamiltonian_JW())
-        self.vac = evecs[:,0].reshape((self.N, 1))
+        self.vac = evecs[:, 0].reshape((self.N, 1))
+        if Gplus:
+            eta0_dag = 0.5 * (c(0, self.n) - c(self.n - 1, self.n) + c(0, self.n, dagger=True) + c(self.n - 1, self.n, dagger=True))
+            self.vac = 0.5 ** 0.5 * (self.vac + eta0_dag @ self.vac)
         return self.vac
     
     def tfim_hamiltonian_as_sum(self):
